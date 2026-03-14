@@ -243,6 +243,145 @@ def bootstrap_ttr(sets_list: list, ttr_opponents: list, best_of: int = 5,
 # ---------------------------------------------------------
 # 8. Parsing
 # ---------------------------------------------------------
+# Subset-Analyse
+# ---------------------------------------------------------
+
+def run_subset_analysis(rows: list, label: str, best_of: int, n_boot: int):
+    """
+    Führt vollständige Analyse für eine Teilmenge von table_rows durch.
+    Gibt None zurück wenn zu wenig Daten.
+    """
+    if not rows:
+        return None
+
+    parsed_sets   = [r["sets"]    for r in rows]
+    ttr_opponents = [r["ttr_opp"] for r in rows]
+    p_match_list  = [r["p_match"] for r in rows]
+
+    try:
+        ttr_hat = tagesform_ttr_multi(p_match_list, ttr_opponents, best_of)
+        _, ci_low, ci_high, boot_samples = bootstrap_ttr(
+            parsed_sets, ttr_opponents, best_of, n_boot=n_boot)
+    except Exception:
+        return None
+
+    n    = len(rows)
+    wins = sum(1 for r in rows if sum(a > b for a,b in r["sets"]) >
+                                   sum(b > a for a,b in r["sets"]))
+    avg_ttr  = sum(r["ttr_opp"] for r in rows) / n
+    avg_pm   = sum(p_match_list) / n
+    boot_std = float(np.std(boot_samples))
+    boot_med = float(np.median(boot_samples))
+    s1_lo    = float(np.quantile(boot_samples, 0.1587))
+    s1_hi    = float(np.quantile(boot_samples, 0.8413))
+    skew     = boot_med - ttr_hat
+
+    return {
+        "label":        label,
+        "n":            n,
+        "wins":         wins,
+        "ttr_hat":      ttr_hat,
+        "ci_low":       ci_low,
+        "ci_high":      ci_high,
+        "s1_lo":        s1_lo,
+        "s1_hi":        s1_hi,
+        "boot_std":     boot_std,
+        "boot_med":     boot_med,
+        "skew":         skew,
+        "avg_ttr":      avg_ttr,
+        "avg_pm":       avg_pm,
+        "boot_samples": boot_samples,
+    }
+
+
+def render_subset(res: dict):
+    """Rendert eine vollständige Subset-Analyse (wie Gesamtsaison)."""
+    ttr_hat      = res["ttr_hat"]
+    ci_low       = res["ci_low"]
+    ci_high      = res["ci_high"]
+    s1_lo        = res["s1_lo"]
+    s1_hi        = res["s1_hi"]
+    boot_std     = res["boot_std"]
+    boot_med     = res["boot_med"]
+    skew         = res["skew"]
+    boot_samples = res["boot_samples"]
+    n            = res["n"]
+    wins         = res["wins"]
+    avg_ttr      = res["avg_ttr"]
+    avg_pm       = res["avg_pm"]
+
+    skew_color = "#34d399" if skew > 5 else "#f87171" if skew < -5 else "#6b7280"
+    skew_str   = f"{skew:+.0f}"
+
+    # Performance Rating Box
+    st.markdown(f"""
+    <div class="ttr-result-box">
+      <div>
+        <div class="ttr-label">Performance Rating</div>
+        <div class="ttr-value">{ttr_hat:.0f}</div>
+      </div>
+      <div style="flex:1;display:flex;gap:1.5rem;flex-wrap:wrap;">
+        <div><div class="ttr-label">Spiele</div>
+             <div style="font-size:1.4rem;font-weight:600;color:#e8eaf0;font-family:'DM Mono',monospace">{wins}W – {n-wins}L</div></div>
+        <div><div class="ttr-label">Ø TTR Gegner</div>
+             <div style="font-size:1.4rem;font-weight:600;color:#e8eaf0;font-family:'DM Mono',monospace">{avg_ttr:.0f}</div></div>
+        <div><div class="ttr-label">Ø p̂ Match</div>
+             <div style="font-size:1.4rem;font-weight:600;color:#e8eaf0;font-family:'DM Mono',monospace">{avg_pm:.1%}</div></div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # KI-Box
+    st.markdown(f"""
+    <div style="display:flex;gap:1.2rem;margin:1rem 0;flex-wrap:wrap;">
+      <div style="background:#161920;border:1px solid #2a2d3a;border-radius:10px;padding:0.8rem 1.2rem;">
+        <div class="ttr-label">95%-KI (2σ)</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.1rem;color:#e8eaf0;font-weight:600;">
+          [{ci_low:.0f},&nbsp;{ci_high:.0f}]
+        </div>
+      </div>
+      <div style="background:#161920;border:1px solid #2a2d3a;border-radius:10px;padding:0.8rem 1.2rem;">
+        <div class="ttr-label">68%-KI (1σ)</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.1rem;color:#e8eaf0;font-weight:600;">
+          [{s1_lo:.0f},&nbsp;{s1_hi:.0f}]
+        </div>
+      </div>
+      <div style="background:#161920;border:1px solid #2a2d3a;border-radius:10px;padding:0.8rem 1.2rem;">
+        <div class="ttr-label">σ</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.1rem;color:#e8eaf0;font-weight:600;">
+          {boot_std:.0f}
+        </div>
+      </div>
+      <div style="background:#161920;border:1px solid #2a2d3a;border-radius:10px;padding:0.8rem 1.2rem;">
+        <div class="ttr-label">Median</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.1rem;color:#e8eaf0;font-weight:600;">
+          {boot_med:.0f}
+          <span style="font-size:0.85rem;color:{skew_color};margin-left:0.4rem;">{skew_str}</span>
+        </div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Asymmetrie-Hinweis
+    if ttr_hat < s1_lo or ttr_hat > s1_hi:
+        direction = "unter" if ttr_hat < s1_lo else "über"
+        st.info(f"ℹ️ **Asymmetrie:** Performance Rating ({ttr_hat:.0f}) liegt {direction} dem 1σ-KI [{s1_lo:.0f}, {s1_hi:.0f}].")
+
+    # Histogramm
+    b_min = int(np.floor(boot_samples.min() / 10) * 10)
+    b_max = int(np.ceil(boot_samples.max()  / 10) * 10)
+    n_bins = max(10, (b_max - b_min) // 10)
+    hist_counts, hist_edges = np.histogram(boot_samples, bins=n_bins, range=(b_min, b_max))
+    bin_labels = [int(round((hist_edges[i]+hist_edges[i+1])/2)) for i in range(len(hist_counts))]
+    df_hist = pd.DataFrame({"TTR": bin_labels, "Häufigkeit": hist_counts.astype(float)}).set_index("TTR")
+    st.bar_chart(df_hist["Häufigkeit"], color="#3d8ef8")
+    st.caption(
+        f"MoM = {ttr_hat:.0f}  |  Median = {boot_med:.0f} ({skew_str})  |  "
+        f"σ = {boot_std:.0f}  |  1σ-KI: [{s1_lo:.0f}, {s1_hi:.0f}]  |  "
+        f"2σ-KI: [{ci_low:.0f}, {ci_high:.0f}]"
+    )
+
+
 
 def parse_set_scores(score_str: str) -> list:
     """
@@ -631,6 +770,7 @@ def parse_ergebnis_page(html: str) -> list:
     matches = []
     current_date = None
     current_mannschaft = None
+    current_heimgast = ""
     seen = set()  # Deduplizierung: (datum, gegner)
 
     for table in soup.find_all("table"):
@@ -649,6 +789,7 @@ def parse_ergebnis_page(html: str) -> list:
                 # Erste Zeile eines Punktspiels:
                 # [0]=leer [1]=Datum [2]=H/G [3]=Mannschaft [4]=Erg [5]=Gegner [6]=Sätze [7]=Erg
                 current_date       = texts[1]
+                current_heimgast   = texts[2]  # "H" oder "G"
                 current_mannschaft = texts[3]
                 gegner   = texts[5]
                 saetze   = texts[6]
@@ -675,6 +816,7 @@ def parse_ergebnis_page(html: str) -> list:
                 "datum":      current_date,
                 "gegner":     gegner,
                 "mannschaft": current_mannschaft or "",
+                "heimgast":   current_heimgast,
                 "saetze":     saetze,
                 "ergebnis":   ergebnis,
             })
@@ -689,7 +831,8 @@ def parse_ttr_page(html: str) -> dict:
                             [4]=TTR [5]=+/- [6]=Erg
     """
     soup = BeautifulSoup(html, "html.parser")
-    ttr_map = {}
+    ttr_map    = {}
+    livepz_map = {}
     current_date = None
     for table in soup.find_all("table"):
         for row in table.find_all("tr"):
@@ -704,23 +847,38 @@ def parse_ttr_page(html: str) -> dict:
                 current_date = texts[1]
                 gegner   = texts[5]
                 ttr_info = texts[7]
+                delta_str = texts[8] if len(texts) > 8 else ""
             elif len(cells) == 8:
                 # Folgezeile: [0]=leer [1]=leer [2]=colspan3 [3]=Gegner
                 #             [4]=colspan3 [5]=TTR [6]=+/- [7]=Erg
-                gegner   = texts[3]
-                ttr_info = texts[5]
+                gegner    = texts[3]
+                ttr_info  = texts[5]
+                delta_str = texts[6] if len(texts) > 6 else ""
             else:
                 continue
 
             if not current_date or not gegner or gegner == "Gegenspieler":
                 continue
 
-            m = re.search(r"\d{3,4} vs\.\s*(\d{3,4})", ttr_info)
+            m = re.search(r"(\d{3,4}) vs\.\s*(\d{3,4})", ttr_info)
             if m:
-                ttr_map[(current_date, gegner)] = int(m.group(1))
-    return ttr_map
+                eigener_ttr = int(m.group(1))
+                ttr_map[(current_date, gegner)] = int(m.group(2))
+                # Eigenen TTR + Delta für LivePZ-Verlauf speichern
+                try:
+                    delta = int(re.sub(r"[^\d\-+]", "", delta_str))
+                    livepz_nach = eigener_ttr + delta
+                except (ValueError, TypeError):
+                    livepz_nach = eigener_ttr
+                livepz_map[(current_date, gegner)] = {
+                    "ttr_vor":    eigener_ttr,
+                    "ttr_nach":   livepz_nach,
+                    "delta":      delta_str,
+                }
+    return ttr_map, livepz_map
 
-def merge_matches_with_ttr(matches: list, ttr_map: dict) -> list:
+def merge_matches_with_ttr(matches: list, ttr_map: dict,
+                            livepz_map: dict = None) -> list:
     """
     Verknüpft Spielergebnisse mit TTR-Werten des Gegners.
     Matching-Strategie (in Reihenfolge):
@@ -728,6 +886,8 @@ def merge_matches_with_ttr(matches: list, ttr_map: dict) -> list:
       2. Fallback: nur gegner (nützlich wenn TTR-Seite zeitlich begrenzt ist)
     Rückgabe: (merged_list, match_stats_dict)
     """
+    if livepz_map is None:
+        livepz_map = {}
     # Fallback-Map: gegner → [(datum, ttr), ...] – nimm den Eintrag mit nächstem Datum
     from collections import defaultdict
     gegner_map = defaultdict(list)
@@ -760,13 +920,21 @@ def merge_matches_with_ttr(matches: list, ttr_map: dict) -> list:
             stats["missing"] += 1
             continue
 
+        # LivePZ nach dem Spiel (letztes Spiel des Tages = aktuellster Wert)
+        lpz = livepz_map.get(key, {})
+
         merged.append({
-            "datum":      m["datum"],
-            "gegner":     m["gegner"],
-            "mannschaft": m["mannschaft"],
-            "ttr_gegner": ttr,
-            "saetze":     m["saetze"],
-            "ergebnis":   m["ergebnis"],
+            "datum":       m["datum"],
+            "gegner":      m["gegner"],
+            "mannschaft":  m["mannschaft"],
+            "heimgast":    m.get("heimgast", ""),
+            "runde":       m.get("runde", ""),
+            "ttr_gegner":  ttr,
+            "livepz_vor":  lpz.get("ttr_vor"),
+            "livepz_nach": lpz.get("ttr_nach"),
+            "livepz_delta":lpz.get("delta", ""),
+            "saetze":      m["saetze"],
+            "ergebnis":    m["ergebnis"],
         })
     return merged, stats
 
@@ -803,81 +971,98 @@ def main():
     with tab_web:
         st.markdown('<div class="section-header">Web-Import</div>', unsafe_allow_html=True)
         st.markdown(
-            '<div class="hint-text">Füge die Links zu Vorrunde/Rückrunde und zur TTR-Entwicklung ein. '
-            'Die App lädt die Einzel-Ergebnisse automatisch und übernimmt die TTR-Werte der Gegner.<br>'
+            '<div class="hint-text">Füge eine beliebige bettv-URL des Spielers ein – '
+            'die App erkennt automatisch Staffel und Spieler und lädt Vorrunde, Rückrunde '
+            'und TTR-Entwicklung.<br>'
             '<b>Doppel werden automatisch ignoriert.</b></div>',
             unsafe_allow_html=True
         )
 
-        col1, col2 = st.columns(2)
-        with col1:
-            url_vr  = st.text_input("Vorrunde-URL", placeholder="https://bettv.tischtennislive.de/...Page=Vorrunde")
-            url_rr  = st.text_input("Rückrunde-URL (optional)", placeholder="https://bettv.tischtennislive.de/...Page=Rueckrunde")
-        with col2:
-            url_ttr = st.text_input("TTR-Entwicklung-URL", placeholder="https://bettv.tischtennislive.de/...Page=EntwicklungTTR")
+        url_input = st.text_input(
+            "bettv-URL",
+            placeholder="https://bettv.tischtennislive.de/default.aspx?...&L2P=8009&L3P=97662&..."
+        )
+
+        def _extract_bettv_params(url: str):
+            """Extrahiert L2P und L3P aus einer bettv-URL."""
+            import urllib.parse
+            params = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+            l2p = params.get("L2P", [None])[0]
+            l3p = params.get("L3P", [None])[0]
+            return l2p, l3p
+
+        def _build_bettv_url(l2p: str, l3p: str, page: str) -> str:
+            return (f"https://bettv.tischtennislive.de/default.aspx"
+                    f"?L1=Ergebnisse&L2=TTStaffeln&L2P={l2p}&L3=Spieler&L3P={l3p}&Page={page}")
 
         if st.button("🔄 Daten laden", key="btn_web_import"):
-            if not url_vr and not url_rr:
-                st.error("Bitte mindestens eine Ergebnis-URL eingeben.")
-            elif not url_ttr:
-                st.error("Bitte die TTR-Entwicklungs-URL eingeben.")
+            if not url_input.strip():
+                st.error("Bitte eine bettv-URL eingeben.")
             else:
-                with st.spinner("Lade Daten von bettv.tischtennislive.de…"):
-                    try:
-                        # TTR-Seite laden (mit erweitertem Datumsbereich via POST)
+                l2p, l3p = _extract_bettv_params(url_input.strip())
+                if not l2p or not l3p:
+                    st.error("❌ Konnte L2P (Staffel-ID) oder L3P (Spieler-ID) nicht aus der URL lesen. "
+                             "Bitte eine vollständige bettv-URL einfügen.")
+                else:
+                    url_vr  = _build_bettv_url(l2p, l3p, "Vorrunde")
+                    url_rr  = _build_bettv_url(l2p, l3p, "Rueckrunde")
+                    url_ttr = _build_bettv_url(l2p, l3p, "EntwicklungTTR")
+                    st.caption(f"Staffel-ID: {l2p} · Spieler-ID: {l3p}")
+
+                    with st.spinner("Lade Daten von bettv.tischtennislive.de…"):
                         try:
-                            ttr_html = _fetch_ttr_all(url_ttr)
-                        except Exception as e:
-                            st.error(f"❌ TTR-Seite nicht erreichbar: {e}")
-                            st.stop()
-                        ttr_map = parse_ttr_page(ttr_html)
-                        n_ttr = len(ttr_map)
-                        st.info(f"TTR-Seite geladen: {n_ttr} Einträge gefunden.")
-                        if not ttr_map:
-                            st.warning("⚠️ TTR-Seite geladen, aber keine Ratings gefunden. Stimmt die URL? (erwartet: ...Page=EntwicklungTTR)")
-
-                        # Ergebnis-Seiten laden
-                        all_matches = []
-                        for url, label in [(url_vr, "Vorrunde"), (url_rr, "Rückrunde")]:
-                            if not url.strip():
-                                continue
+                            # TTR-Seite laden (mit erweitertem Datumsbereich via POST)
                             try:
-                                html = _fetch_html(url)
+                                ttr_html = _fetch_ttr_all(url_ttr)
                             except Exception as e:
-                                st.error(f"❌ {label}-Seite nicht erreichbar: {e}")
-                                continue
-                            ms = parse_ergebnis_page(html)
-                            st.info(f"{label}: {len(ms)} Einzel-Spiele geparst.")
-                            if not ms:
-                                st.warning(f"⚠️ {label}-Seite geladen, aber keine Spiele gefunden. Stimmt die URL? (erwartet: ...Page=Vorrunde / ...Page=Rueckrunde)")
-                            for m in ms:
-                                m["runde"] = label
-                            all_matches.extend(ms)
+                                st.error(f"❌ TTR-Seite nicht erreichbar: {e}")
+                                st.stop()
+                            ttr_map, livepz_map = parse_ttr_page(ttr_html)
+                            n_ttr = len(ttr_map)
+                            st.info(f"TTR-Seite geladen: {n_ttr} Einträge gefunden.")
+                            if not ttr_map:
+                                st.warning("⚠️ TTR-Seite geladen, aber keine Ratings gefunden.")
 
-                        merged, mstats = merge_matches_with_ttr(all_matches, ttr_map)
+                            # Ergebnis-Seiten laden
+                            all_matches = []
+                            for url, label in [(url_vr, "Vorrunde"), (url_rr, "Rückrunde")]:
+                                try:
+                                    html = _fetch_html(url)
+                                except Exception as e:
+                                    st.error(f"❌ {label}-Seite nicht erreichbar: {e}")
+                                    continue
+                                ms = parse_ergebnis_page(html)
+                                st.info(f"{label}: {len(ms)} Einzel-Spiele geparst.")
+                                if not ms:
+                                    st.warning(f"⚠️ {label}: keine Spiele gefunden.")
+                                for m in ms:
+                                    m["runde"] = label
+                                all_matches.extend(ms)
 
-                        if not merged:
-                            # Diagnose: zeige was vorhanden ist
-                            st.error("❌ Keine Übereinstimmungen zwischen Ergebnissen und TTR-Werten.")
-                            if all_matches:
-                                sample_keys = [(m["datum"], m["gegner"]) for m in all_matches[:3]]
-                                st.write("Beispiel-Keys aus Ergebnissen:", sample_keys)
-                            if ttr_map:
-                                sample_ttr = list(ttr_map.items())[:3]
-                                st.write("Beispiel-Keys aus TTR-Seite:", sample_ttr)
-                            st.info("Tipp: Datum und Gegnername müssen auf beiden Seiten identisch sein.")
-                        else:
-                            st.session_state["web_matches"] = merged
-                            msg = f"{len(merged)} Einzel-Spiele geladen."
-                            if mstats["fallback"] > 0:
-                                msg += (f" ℹ️ {mstats['fallback']} Spiel(e) ohne exaktes Datum-Match – "
-                                        f"TTR-Wert nach Gegner zugeordnet.")
-                            if mstats["missing"] > 0:
-                                msg += f" ⚠️ {mstats['missing']} Spiel(e) ohne TTR-Wert übersprungen."
-                            st.success(msg)
+                            merged, mstats = merge_matches_with_ttr(
+                                all_matches, ttr_map, livepz_map)
 
-                    except Exception as e:
-                        st.error(f"Fehler beim Laden: {e}")
+                            if not merged:
+                                st.error("❌ Keine Übereinstimmungen zwischen Ergebnissen und TTR-Werten.")
+                                if all_matches:
+                                    sample_keys = [(m["datum"], m["gegner"]) for m in all_matches[:3]]
+                                    st.write("Beispiel-Keys aus Ergebnissen:", sample_keys)
+                                if ttr_map:
+                                    sample_ttr = list(ttr_map.items())[:3]
+                                    st.write("Beispiel-Keys aus TTR-Seite:", sample_ttr)
+                                st.info("Tipp: Datum und Gegnername müssen auf beiden Seiten identisch sein.")
+                            else:
+                                st.session_state["web_matches"] = merged
+                                msg = f"{len(merged)} Einzel-Spiele geladen."
+                                if mstats["fallback"] > 0:
+                                    msg += (f" ℹ️ {mstats['fallback']} Spiel(e) ohne exaktes Datum-Match – "
+                                            f"TTR-Wert nach Gegner zugeordnet.")
+                                if mstats["missing"] > 0:
+                                    msg += f" ⚠️ {mstats['missing']} Spiel(e) ohne TTR-Wert übersprungen."
+                                st.success(msg)
+
+                        except Exception as e:
+                            st.error(f"Fehler beim Laden: {e}")
 
         # Geladene Spiele anzeigen und auswählen
         if "web_matches" in st.session_state:
@@ -1040,9 +1225,13 @@ def main():
                 table_rows.append({
                     "idx":            idx + 1,
                     "ttr_opp":        ttr_opp,
-                    "gegner":         pf["gegner"]     if pf else "",
-                    "datum":          pf["datum"]      if pf else "",
-                    "mannschaft":     pf["mannschaft"] if pf else "",
+                    "gegner":         pf["gegner"]          if pf else "",
+                    "datum":          pf["datum"]           if pf else "",
+                    "mannschaft":     pf["mannschaft"]      if pf else "",
+                    "heimgast":       pf.get("heimgast", "") if pf else "",
+                    "runde":          pf.get("runde", "")    if pf else "",
+                    "livepz_vor":     pf.get("livepz_vor")   if pf else None,
+                    "livepz_nach":    pf.get("livepz_nach")  if pf else None,
                     "player_points":  player_points,
                     "opp_points":     opp_points,
                     "sets":           sets,
@@ -1085,11 +1274,24 @@ def main():
                             grp_pm   = [r["p_match"] for r in grp]
                             ttr_hat_grp = tagesform_ttr_multi(grp_pm, grp_ttr, best_of)
                             _, _, _, boot = bootstrap_ttr(grp_sets, grp_ttr, best_of, n_boot=1000)
+                            livepz_entries = [
+                                (r["livepz_vor"], r["livepz_nach"])
+                                for r in grp
+                                if r.get("livepz_vor") is not None
+                                and r.get("livepz_nach") is not None
+                            ]
+                            if livepz_entries:
+                                ttr_vor_ps = livepz_entries[0][0]   # Eingangs-TTR des Punktspiels
+                                delta_sum  = sum(nach - vor for vor, nach in livepz_entries)
+                                livepz_ps  = ttr_vor_ps + delta_sum
+                            else:
+                                livepz_ps = None
                             grp_stats[key] = {
                                 "ttr_hat": ttr_hat_grp,
                                 "s1_lo":   float(np.quantile(boot, 0.1587)),
                                 "s1_hi":   float(np.quantile(boot, 0.8413)),
                                 "sigma":   float(np.std(boot)),
+                                "livepz":  livepz_ps,
                             }
 
                 # Gesamt-Bootstrap
@@ -1366,9 +1568,22 @@ def main():
                 st.markdown('<div class="section-header">Saisonverlauf</div>',
                             unsafe_allow_html=True)
 
-                show_trend = False
-                if len(groups) >= 3:
-                    show_trend = st.toggle("Linearen Trend anzeigen", value=False)
+                show_trend    = False
+                show_rolling  = False
+                show_livepz   = False
+
+                toggle_cols = st.columns(3)
+                with toggle_cols[0]:
+                    if len(groups) >= 3:
+                        show_trend = st.toggle("📈 Linearer Trend", value=False)
+                with toggle_cols[1]:
+                    if len(groups) >= 2:
+                        show_rolling = st.toggle("🔄 Gleitender Verlauf", value=False)
+                with toggle_cols[2]:
+                    livepz_available = any(gs.get("livepz") is not None
+                                           for gs in grp_stats.values())
+                    if livepz_available:
+                        show_livepz = st.toggle("🏅 LivePZ-Verlauf", value=False)
 
                 # Datenpunkte: ein Eintrag pro Punktspiel
                 ps_x      = []
@@ -1377,25 +1592,30 @@ def main():
                 ps_s1_hi  = []
                 ps_sigma  = []
                 ps_label  = []
+                ps_livepz = []   # LivePZ nach Punktspiel (None wenn nicht verfügbar)
 
                 for i, ((datum, mannschaft), grp) in enumerate(groups):
                     gs = grp_stats[(datum, mannschaft)]
                     wins_grp = sum(1 for r in grp
                                    if sum(a > b for a,b in r["sets"]) >
                                       sum(b > a for a,b in r["sets"]))
+                    livepz = gs.get("livepz")
                     ps_x.append(i + 1)
                     ps_ttr.append(gs["ttr_hat"])
                     ps_s1_lo.append(gs["s1_lo"])
                     ps_s1_hi.append(gs["s1_hi"])
                     ps_sigma.append(max(gs["sigma"], 1.0))
+                    ps_livepz.append(livepz)
+                    livepz_str = f"<br>LivePZ nach PS: {livepz}" if livepz else ""
                     ps_label.append(
                         f"<b>Punktspiel {i+1}</b><br>"
                         f"{datum}<br>"
                         f"{mannschaft}<br>"
-                        f"Rating: {gs['ttr_hat']:.0f}<br>"
+                        f"Performance Rating: {gs['ttr_hat']:.0f}<br>"
                         f"1σ-KI: [{gs['s1_lo']:.0f}, {gs['s1_hi']:.0f}]<br>"
                         f"σ = {gs['sigma']:.0f}<br>"
                         f"W/L: {wins_grp}/{len(grp)-wins_grp}"
+                        f"{livepz_str}"
                     )
 
                 # Bootstrap-Dichte für Hintergrundband
@@ -1484,7 +1704,8 @@ def main():
                         y=np.concatenate([ci2_up, ci2_dn[::-1]]).tolist(),
                         fill="toself",
                         fillcolor="rgba(250,180,50,0.10)",
-                        line_width=0,
+                        mode="lines",
+                        line=dict(width=0),
                         hoverinfo="skip",
                         showlegend=False,
                     ))
@@ -1495,7 +1716,8 @@ def main():
                         y=np.concatenate([ci1_up, ci1_dn[::-1]]).tolist(),
                         fill="toself",
                         fillcolor="rgba(250,180,50,0.20)",
-                        line_width=0,
+                        mode="lines",
+                        line=dict(width=0),
                         hoverinfo="skip",
                         showlegend=False,
                     ))
@@ -1531,7 +1753,7 @@ def main():
                     x=ps_x,
                     y=ps_ttr,
                     mode="markers+lines",
-                    name="Punktspiel-Rating",
+                    name="Performance Rating",
                     marker=dict(color="#e8eaf0", size=8, symbol="circle"),
                     line=dict(color="#6b7280", width=1, dash="dot"),
                     error_y=dict(
@@ -1544,6 +1766,97 @@ def main():
                     customdata=ps_label,
                 ))
 
+                # 7) Gleitender MLE-Verlauf (rollierendes Fenster bis 5 Punktspiele)
+                if show_rolling and len(ps_x) >= 2:
+                    with st.spinner("Berechne gleitenden Verlauf…"):
+                        roll_x    = []
+                        roll_ttr  = []
+                        roll_s1lo = []
+                        roll_s1hi = []
+                        roll_2slo = []
+                        roll_2shi = []
+                        roll_label = []
+
+                        for i in range(len(groups)):
+                            window_start = max(0, i - 4)  # bis 5 Punktspiele
+                            window = list(groups[window_start:i+1])
+                            w_rows = [r for _, grp in window for r in grp]
+                            w_sets = [r["sets"]    for r in w_rows]
+                            w_ttr  = [r["ttr_opp"] for r in w_rows]
+                            w_pm   = [r["p_match"] for r in w_rows]
+                            try:
+                                w_pr = tagesform_ttr_multi(w_pm, w_ttr, best_of)
+                                _, w_ci_lo, w_ci_hi, w_boot = bootstrap_ttr(
+                                    w_sets, w_ttr, best_of, n_boot=500)
+                                w_s1lo = float(np.quantile(w_boot, 0.1587))
+                                w_s1hi = float(np.quantile(w_boot, 0.8413))
+                                n_ps_window = i - window_start + 1
+                                roll_x.append(i + 1)
+                                roll_ttr.append(w_pr)
+                                roll_s1lo.append(w_s1lo)
+                                roll_s1hi.append(w_s1hi)
+                                roll_2slo.append(w_ci_lo)
+                                roll_2shi.append(w_ci_hi)
+                                roll_label.append(
+                                    f"<b>Gleitender Verlauf PS {i+1}</b><br>"
+                                    f"Fenster: PS {window_start+1}–{i+1} "
+                                    f"({n_ps_window} Punktspiel{'e' if n_ps_window>1 else ''})<br>"
+                                    f"Rating: {w_pr:.0f}<br>"
+                                    f"1σ-KI: [{w_s1lo:.0f}, {w_s1hi:.0f}]<br>"
+                                    f"2σ-KI: [{w_ci_lo:.0f}, {w_ci_hi:.0f}]"
+                                )
+                            except Exception:
+                                pass
+
+                    if roll_x:
+                        # 2σ-Band
+                        fig.add_trace(go.Scatter(
+                            x=roll_x + roll_x[::-1],
+                            y=roll_2shi + roll_2slo[::-1],
+                            fill="toself",
+                            fillcolor="rgba(52,211,153,0.07)",
+                            mode="lines",
+                            line=dict(width=0),
+                            hoverinfo="skip",
+                            showlegend=False,
+                        ))
+                        # 1σ-Band
+                        fig.add_trace(go.Scatter(
+                            x=roll_x + roll_x[::-1],
+                            y=roll_s1hi + roll_s1lo[::-1],
+                            fill="toself",
+                            fillcolor="rgba(52,211,153,0.15)",
+                            mode="lines",
+                            line=dict(width=0),
+                            hoverinfo="skip",
+                            showlegend=False,
+                        ))
+                        # Gleitende Linie
+                        fig.add_trace(go.Scatter(
+                            x=roll_x,
+                            y=roll_ttr,
+                            mode="lines+markers",
+                            name="Gleitend (5 PS)",
+                            marker=dict(color="#34d399", size=5, symbol="circle"),
+                            line=dict(color="#34d399", width=2, dash="solid"),
+                            hovertemplate="%{customdata}<extra></extra>",
+                            customdata=roll_label,
+                        ))
+
+                # 8) LivePZ-Verlauf (toggle-bar)
+                livepz_x = [x for x, v in zip(ps_x, ps_livepz) if v is not None]
+                livepz_y = [v for v in ps_livepz if v is not None]
+                if show_livepz and livepz_x:
+                    fig.add_trace(go.Scatter(
+                        x=livepz_x,
+                        y=livepz_y,
+                        mode="markers+lines",
+                        name="LivePZ",
+                        marker=dict(color="#f59e0b", size=6, symbol="diamond"),
+                        line=dict(color="#f59e0b", width=1.5, dash="solid"),
+                        hovertemplate="<b>LivePZ nach Punktspiel %{x}</b><br>%{y}<extra></extra>",
+                    ))
+
                 fig.update_layout(
                     paper_bgcolor="#0f1117",
                     plot_bgcolor="#161920",
@@ -1551,12 +1864,69 @@ def main():
                     xaxis=dict(title="Punktspiel", tickmode="linear", tick0=1, dtick=1,
                                gridcolor="#2a2d3a", zeroline=False),
                     yaxis=dict(title="Rating", gridcolor="#2a2d3a", zeroline=False),
-                    showlegend=False,
-                    margin=dict(l=50, r=120, t=30, b=50),
+                    showlegend=show_rolling or (show_livepz and bool(livepz_x)),
+                    legend=dict(
+                        bgcolor="#161920", bordercolor="#2a2d3a", borderwidth=1,
+                        font=dict(size=11, color="#9ca3af"),
+                        orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
+                    ),
+                    margin=dict(l=50, r=120, t=50, b=50),
                     height=420,
                 )
 
                 st.plotly_chart(fig, use_container_width=True)
+
+            # ── Subset-Analysen (nur bei Web-Import) ──
+            if has_meta:
+                st.markdown('<div class="section-header">Subset-Analysen</div>',
+                            unsafe_allow_html=True)
+
+                # Subsets definieren
+                all_groups_flat = [(datum, mannschaft, grp)
+                                   for (datum, mannschaft), grp in groups]
+                n_ps = len(groups)
+
+                subsets = []
+
+                # Vorrunde / Rückrunde
+                vr_rows = [r for r in table_rows if r.get("runde") == "Vorrunde"]
+                rr_rows = [r for r in table_rows if r.get("runde") == "Rückrunde"]
+                if vr_rows:
+                    subsets.append(("📅 Nur Vorrunde", vr_rows))
+                if rr_rows:
+                    subsets.append(("📅 Nur Rückrunde", rr_rows))
+
+                # Heim / Auswärts
+                heim_rows = [r for r in table_rows if r.get("heimgast", "").upper() == "H"]
+                gast_rows = [r for r in table_rows if r.get("heimgast", "").upper() == "G"]
+                if heim_rows:
+                    subsets.append(("🏠 Nur Heimspiele", heim_rows))
+                if gast_rows:
+                    subsets.append(("✈️ Nur Auswärtsspiele", gast_rows))
+
+                # Letzte 5 Punktspiele (nur ab 6 Punktspielen)
+                if n_ps >= 6:
+                    last5_keys = set(k for k, _ in groups[-5:])
+                    last5_rows = [r for r in table_rows
+                                  if (r["datum"], r["mannschaft"]) in last5_keys]
+                    subsets.append(("🕐 Letzte 5 Punktspiele", last5_rows))
+
+                if not subsets:
+                    st.markdown(
+                        '<div class="hint-text">Keine Subset-Daten verfügbar – '
+                        'Vorrunde/Rückrunde und Heim/Auswärts werden aus dem Web-Import übernommen.</div>',
+                        unsafe_allow_html=True)
+                else:
+                    with st.spinner("Berechne Subset-Analysen…"):
+                        subset_results = []
+                        for label, rows in subsets:
+                            r = run_subset_analysis(rows, label, best_of, n_boot=1000)
+                            if r:
+                                subset_results.append(r)
+
+                    for sr in subset_results:
+                        with st.expander(f"{sr['label']} · {sr['wins']}W–{sr['n']-sr['wins']}L · PR: {sr['ttr_hat']:.0f}"):
+                            render_subset(sr)
 
 
     # ════════════════════════════════════════════════════════
@@ -1691,14 +2061,19 @@ def main():
             für jedes Punktspiel ein eigenes Performance Rating mit Fehlerbalken.
             So lässt sich erkennen, ob einzelne Punktspiele aus dem Rahmen fallen –
             etwa weil die Gegner ungewöhnlich stark oder schwach waren.<br><br>
-            Ab drei Punktspielen kann ein <strong>linearer Trend</strong> eingeblendet werden.
-            Er beantwortet die Frage: <em>Entwickelt sich die Spielstärke im Saisonverlauf
-            nach oben oder nach unten?</em><br><br>
-            Wichtig dabei: Punktspiele mit mehr Einzelspielen und Rallies liefern eine
-            zuverlässigere Schätzung und werden daher stärker gewichtet.
-            Die zwei Konfidenzbänder (1σ innen, 2σ außen) zeigen, wie sicher der Trend ist.
-            Ein breites Band bedeutet schlicht: Die Datenbasis ist noch zu klein für eine
-            belastbare Aussage.
+            Drei optionale Overlays lassen sich per Toggle einblenden:<br><br>
+            <b>📈 Linearer Trend</b> – ab drei Punktspielen verfügbar. Eine gewichtete
+            Regressionsgerade zeigt ob die Spielstärke im Saisonverlauf tendenziell
+            zu- oder abnimmt. Punktspiele mit engerem Konfidenzintervall werden stärker
+            gewichtet. Die Konfidenzbänder (1σ und 2σ) zeigen wie sicher der Trend ist.<br><br>
+            <b>🔄 Gleitender Verlauf</b> – das Performance Rating aus dem aktuellen
+            Punktspiel und bis zu vier vorherigen wird gemeinsam berechnet. Das ergibt
+            einen geglätteten Verlauf der weniger empfindlich auf einzelne Ausreißer
+            reagiert. Auch hier werden 1σ- und 2σ-Konfidenzbänder eingezeichnet.<br><br>
+            <b>🏅 LivePZ-Verlauf</b> – zeigt den offiziellen LivePZ-Wert nach jedem
+            Punktspiel als orangene Linie. Dient als Referenz zum Vergleich mit dem
+            Performance Rating. Der LivePZ wird direkt aus der bettv-Seite gelesen:
+            Eingangs-TTR des Punktspiels plus die Summe aller Einzeldeltas.
             </div>
             """, unsafe_allow_html=True)
 
@@ -1768,7 +2143,8 @@ def main():
              "Performance Rating der Gesamtsaison, gestrichelte Linien die ±1σ- und "
              "±2σ-Grenzen. Der grau-blaue Hintergrund zeigt die Bootstrap-Dichte "
              "(KDE) der Gesamtsaison – hellere Bereiche sind wahrscheinlicher. "
-             "Ab 3 Punktspielen kann optional ein linearer Trend eingeblendet werden."),
+             "Drei optionale Overlays können per Toggle eingeblendet werden: "
+             "linearer Trend, gleitender Verlauf und LivePZ-Referenz."),
 
             ("Linearer Trend", "Gewichtete lineare Regression durch die Punktspiel-Ratings. "
              "Punktspiele mit kleinerem σ (engeres Konfidenzintervall, also mehr Spiele und Rallies) "
@@ -1779,6 +2155,25 @@ def main():
              "das äußere Band (heller) dem 95%-Konfidenzband (2σ). "
              "Ein breites Band bedeutet: Die Datenlage reicht nicht aus um den Trend "
              "zuverlässig zu bestimmen."),
+
+            ("Gleitender Verlauf", "Performance Rating berechnet aus dem jeweils aktuellen "
+             "Punktspiel und bis zu vier vorherigen (rollierende Fenster von maximal 5 Punktspielen). "
+             "Dadurch entsteht ein geglätteter Verlauf der weniger auf einzelne Ausreißer reagiert "
+             "als die Einzelwerte. 1σ- und 2σ-Konfidenzbänder werden ebenfalls berechnet. "
+             "Am Anfang der Saison (weniger als 5 Punktspiele verfügbar) wächst das Fenster "
+             "schrittweise an."),
+
+            ("LivePZ-Verlauf", "Zeigt den offiziellen LivePZ-Wert nach jedem Punktspiel "
+             "als orangene Referenzlinie im Saisonverlaufsdiagramm. "
+             "Der Wert wird aus der bettv-TTR-Entwicklungsseite berechnet: "
+             "Eingangs-TTR des Punktspiels plus die Summe der +/−-Werte aller Einzelspiele. "
+             "Dient als Vergleichsmaßstab zwischen offiziellem Rating und Performance Rating."),
+
+            ("Subset-Analysen", "Vollständige Performance-Rating-Analysen für Teilmengen der "
+             "geladenen Spiele – Vorrunde, Rückrunde, Heimspiele, Auswärtsspiele und die "
+             "letzten 5 Punktspiele (ab 6 Punktspielen). "
+             "Jedes Subset enthält Performance Rating, Konfidenzintervalle und Bootstrap-Histogramm. "
+             "Ermöglicht den Vergleich der Spielstärke unter verschiedenen Bedingungen."),
         ]
 
         for term, erklärung in glossar:

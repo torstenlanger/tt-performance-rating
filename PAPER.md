@@ -20,10 +20,10 @@ Die zentrale Frage lautet: *Auf welchem TTR-Niveau habe ich in dieser Saison tat
 Das Modell behandelt Tischtennis als stochastisches Spiel mit einer einzigen latenten Variable: der **Rally-Wahrscheinlichkeit** *p*, also der Wahrscheinlichkeit, einen einzelnen Punkt zu gewinnen. Alle weiteren Größen – Satzgewinn, Matchgewinn, Rating – folgen deterministisch aus *p* durch eine dreistufige Kaskade:
 
 ```
-p_rally  →  p_set  →  p_match  →  TTR*
+p  →  p_Satz  →  p_Match  →  TTR*
 ```
 
-Dies ist die einzige Domänenannahme: Tischtennis wird als Bernoulli-Prozess auf Rally-Ebene modelliert. Keine Servicevorteil-Korrekturen, keine Formfaktoren, keine Erfahrungswerte.
+Das Modell geht dabei von keinerlei tischtennis-spezifischer Expertise aus. Es wird ausschließlich die Zählweise des Sports verwendet: wie viele Punkte ein Satz dauert, wie viele Sätze ein Match dauert, und wie das TTR-System Siegwahrscheinlichkeiten aus Ratingunterschieden berechnet. Ob ein Punkt durch Aufschlag, Topspin oder Fehler des Gegners zustande kam, spielt keine Rolle. Ebenso wenig fließen Faktoren wie Spielstil, Nervenstärke oder Tagesform in das Modell ein – all das ist in den Punktzahlen bereits enthalten, ohne explizit modelliert zu werden.
 
 ---
 
@@ -47,17 +47,19 @@ Dies ist die negative Binomialverteilung für den ersten Spieler der *m* Sätze 
 
 ### 3.3 Match → TTR (Inversion)
 
-Das TTR-System definiert die Siegwahrscheinlichkeit von Spieler A gegen Spieler B als:
+Das TTR-System definiert die Siegwahrscheinlichkeit von Spieler A (Rating TTR_A) gegen Spieler B (Rating *T*) als Funktion der Ratingdifferenz Δ = TTR_A − *T*:
 
-$$p_{\text{TTR}}(\Delta) = \frac{1}{1 + 10^{-\Delta/150}}, \quad \Delta = \text{TTR}_A - \text{TTR}_B$$
+$$p_{\text{TTR}}(\Delta) = \frac{1}{1 + 10^{-\Delta/150}}$$
 
-Die Inversion lautet:
+Diese Formel wird nach TTR_A aufgelöst. Setzt man die aus der Kaskade berechnete Match-Wahrscheinlichkeit *p*_Match für *p*_TTR(Δ) ein und löst nach TTR_A = TTR\* auf, ergibt sich:
 
-$$\text{TTR}^* = \text{TTR}_{\text{Gegner}} - 150 \cdot \log_{10}\!\left(\frac{1}{p_{\text{Match}}} - 1\right)$$
+$$\text{TTR}^* = T - 150 \cdot \log_{10}\!\left(\frac{1}{p_{\text{Match}}} - 1\right)$$
+
+wobei *T* das bekannte TTR des Gegners ist. TTR\* ist damit das Rating, das die beobachtete Match-Wahrscheinlichkeit exakt erklärt.
 
 ---
 
-## 4. Maximum-Likelihood-Schätzung von p_rally
+## 4. Maximum-Likelihood-Schätzung von p
 
 ### 4.1 Likelihood eines Satzergebnisses
 
@@ -77,7 +79,7 @@ $$\hat{p} = \arg\max_p \sum_{i=1}^{K} \log \mathcal{L}(a_i{:}b_i \mid p)$$
 
 Dies wird numerisch via `scipy.optimize.minimize_scalar` auf dem Intervall (0, 1) gelöst.
 
-**Äquivalenz zu Method of Moments:** Da alle Sätze unabhängig sind und jeder Rally ein Bernoulli-Versuch mit Parameter *p* ist, ist der MLE-Schätzer analytisch äquivalent zur einfachen Punktquote:
+**Äquivalenz zu Method of Moments:** Da alle Sätze unabhängig sind und jede Rally ein Bernoulli-Versuch mit Parameter *p* ist, ist der MLE-Schätzer analytisch äquivalent zur einfachen Punktquote:
 
 $$\hat{p}_{\text{MLE}} = \hat{p}_{\text{MoM}} = \frac{\sum_i a_i}{\sum_i (a_i + b_i)}$$
 
@@ -89,17 +91,17 @@ Die MLE-Formulierung ermöglicht jedoch die direkte Berechnung des Likelihood-Ra
 
 ### 5.1 Einzelpartie
 
-Für eine einzelne Partie gegen Gegner mit TTR-Wert *T*:
+Für eine einzelne Partie gegen einen Gegner mit TTR-Wert *T* ergibt sich das Performance Rating direkt aus der Kaskadeninversion (vgl. Abschnitt 3.3):
 
-$$\text{PR} = T - 150 \cdot \log_{10}\!\left(\frac{1}{\text{Kaskade}(\hat{p})} - 1\right)$$
+$$\text{PR} = T - 150 \cdot \log_{10}\!\left(\frac{1}{p_{\text{Match}}(\hat{p})} - 1\right)$$
 
 ### 5.2 Saison (mehrere Partien)
 
 Für *n* Partien gegen Gegner mit Ratings *T*₁, …, *T*ₙ wird das Performance Rating TTR\* als Lösung der Gleichung gesucht:
 
-$$\sum_{i=1}^{n} \frac{1}{1 + 10^{-({\text{TTR}^*} - T_i)/150}} = \sum_{i=1}^{n} p_{\text{Match},i}$$
+$$\sum_{i=1}^{n} \frac{1}{1 + 10^{-(\text{TTR}^* - T_i)/150}} = \sum_{i=1}^{n} p_{\text{Match},i}$$
 
-Die linke Seite summiert die *erwarteten* Siege bei Rating TTR\*, die rechte Seite die *beobachteten* Match-Wahrscheinlichkeiten. Gelöst wird numerisch via Bisektionsverfahren (Brent-Methode).
+Die linke Seite summiert die *erwarteten* Siege bei Rating TTR\*, die rechte Seite die *beobachteten* Match-Wahrscheinlichkeiten aus der Kaskade. Gelöst wird numerisch via Bisektionsverfahren (Brent-Methode).
 
 Dies ist die Method-of-Moments-Formulierung auf Match-Ebene, die analytisch äquivalent zum MLE auf der kombinierten Rally-Ebene ist: die Information aus allen Rallies aller Partien fließt durch die Kaskade in den gemeinsamen Schätzer ein.
 
@@ -107,7 +109,7 @@ Dies ist die Method-of-Moments-Formulierung auf Match-Ebene, die analytisch äqu
 
 ## 6. Modelldiagnose: Likelihood-Ratio-Test
 
-Der χ²-basierte Likelihood-Ratio-Test prüft die Nullhypothese, dass *p_rally* innerhalb einer Partie konstant war (H₀) gegen die Alternative, dass jeder Satz ein eigenes *pᵢ* hatte (H₁):
+Der χ²-basierte Likelihood-Ratio-Test prüft die Nullhypothese, dass *p* innerhalb einer Partie konstant war (H₀) gegen die Alternative, dass jeder Satz ein eigenes *p*ᵢ hatte (H₁):
 
 $$D = 2 \sum_{i=1}^{K} \left[\log \mathcal{L}(a_i{:}b_i \mid \hat{p}_i) - \log \mathcal{L}(a_i{:}b_i \mid \hat{p})\right]$$
 
@@ -130,15 +132,15 @@ Die Unsicherheit im Performance Rating entsteht ausschließlich durch die endlic
 
 $$p_i^* \sim \text{Beta}(pp_i,\, op_i)$$
 
-wobei *pp*ᵢ und *op*ᵢ die gewonnenen bzw. verlorenen Rallies sind. Dann wird die vollständige Kaskade durchlaufen und ein neues Performance Rating berechnet. Aus *B* = 2000 Iterationen werden die Quantile bestimmt.
+wobei *pp*ᵢ die gewonnenen und *op*ᵢ die verlorenen Rallies in Partie *i* sind. Dann wird die vollständige Kaskade durchlaufen und ein neues Performance Rating berechnet. Aus *B* = 2000 Iterationen werden die Quantile bestimmt.
 
 ### 7.2 Konsistenz mit dem Modell
 
-Diese Formulierung ist konsistent mit der Grundphilosophie: Rally ist die atomare Einheit, alle anderen Größen sind deterministische Funktionen davon. Das Bootstrap-KI quantifiziert daher genau die Unsicherheit die aus der endlichen Rally-Stichprobe entsteht – nicht mehr und nicht weniger.
+Diese Formulierung ist konsistent mit der Grundphilosophie: *p* ist die atomare Einheit, alle anderen Größen sind deterministische Funktionen davon. Das Bootstrap-KI quantifiziert daher genau die Unsicherheit, die aus der endlichen Rally-Stichprobe entsteht – nicht mehr und nicht weniger.
 
 ### 7.3 Asymmetrie bei extremen Datensituationen
 
-Bei stark einseitigen Serien (z.B. 0 Siege aus 16 Partien gegen deutlich stärkere Gegner) kann das Performance Rating außerhalb des 1σ-Konfidenzintervalls liegen. Die Ursache ist die Nichtlinearität der Kaskade: kleine Änderungen in *p_rally* führen bei sehr kleinen *p_match*-Werten zu überproportional großen Änderungen im TTR. Das Bootstrap-KI ist korrekt – der Punktschätzer ist robust, aber nicht median-unverzerrt in diesem Bereich.
+Bei stark einseitigen Serien – etwa 16 Siegen aus 16 Partien gegen deutlich schwächere Gegner – kann das Performance Rating außerhalb des 1σ-Konfidenzintervalls liegen. Die Ursache ist die Nichtlinearität der Kaskade: kleine Änderungen in *p* führen bei sehr großen *p*_Match-Werten zu überproportional großen Änderungen im TTR. Das Bootstrap-KI ist korrekt – der Punktschätzer ist robust, aber nicht median-unverzerrt in diesem Bereich.
 
 ---
 
@@ -159,14 +161,15 @@ Ab drei Punktspielen kann ein **gewichteter linearer Trend** eingeblendet werden
 
 | Schritt | Methode | Formel |
 |---------|---------|--------|
-| Rally-Wahrscheinlichkeit | MLE (= MoM) | p̂ = Σaᵢ / Σ(aᵢ+bᵢ) |
-| Satzwahrscheinlichkeit | Analytisch (Binomial + Verlängerung) | p_Satz(p̂) |
+| Rally-Wahrscheinlichkeit | MLE | p̂ = Σaᵢ / Σ(aᵢ+bᵢ) |
+| Satzwahrscheinlichkeit | Analytisch (Negative Binomial + Verlängerung) | p_Satz(p̂) |
 | Matchwahrscheinlichkeit | Analytisch (Negative Binomial) | p_Match(p_Satz) |
-| Performance Rating | TTR-Inversion | TTR* = T_Gegner − 150·log₁₀(1/p_Match − 1) |
-| Konfidenzintervall | Parametrischer Bootstrap | Beta(pp, op) → Kaskade → TTR* |
+| Performance Rating (Einzelpartie) | TTR-Inversion | TTR* = T − 150·log₁₀(1/p_Match − 1) |
+| Performance Rating (Saison) | MoM (= MLE) | Σ p_TTR(TTR*,Tᵢ) = Σ p_Match,ᵢ |
+| Konfidenzintervall | Parametrischer Bootstrap | Beta(ppᵢ, opᵢ) → Kaskade → TTR* |
 | Modelldiagnose | Likelihood-Ratio-Test | D ~ χ²(K−1) |
 
-Das Modell verwendet ausschließlich die Spielregeln und die TTR-Formel als Domänenwissen. Es macht keine Annahmen über Spielstil, Aufschlag, mentale Stärke oder andere nicht-messbare Faktoren. Die einzige Modellannahme ist die Stationarität von *p_rally* innerhalb einer Partie – die durch den χ²-Test explizit überprüft wird.
+Das Modell verwendet ausschließlich die Spielregeln und die TTR-Formel als Grundlage. Die einzige inhaltliche Annahme ist, dass *p* – die Wahrscheinlichkeit, einen einzelnen Punkt zu gewinnen – innerhalb einer Partie gleichbleibend ist. Diese Annahme wird durch den Likelihood-Ratio-Test (Abschnitt 6) explizit überprüft.
 
 ---
 
@@ -178,3 +181,41 @@ Die App ist in Python/Streamlit implementiert und unter folgendem Link erreichba
 Quellcode: **https://github.com/torstenlanger/tt-performance-rating**
 
 Abhängigkeiten: `streamlit`, `scipy`, `numpy`, `pandas`, `requests`, `beautifulsoup4`, `plotly`
+
+---
+
+## 10. Gleitender Verlauf
+
+Neben dem einzelnen Punktspiel-Rating und dem linearen Trend bietet die App einen **gleitenden Verlauf**: für jedes Punktspiel *i* wird das Performance Rating aus einem rollierenden Fenster der letzten *w* ≤ 5 Punktspiele berechnet:
+
+$$\text{PR}_i^{\text{roll}} = f\!\left(\bigcup_{j=\max(1,\,i-4)}^{i} \text{Spiele}_j\right)$$
+
+Das Fenster wächst zu Saisonbeginn schrittweise an (1, 2, …, 5 Punktspiele) und bleibt ab dem fünften Punktspiel konstant bei maximal 5. Das Konfidenzintervall wird analog zum Gesamtrating per Bootstrap (500 Samples pro Fensterpunkt) berechnet und als 1σ- und 2σ-Band eingezeichnet.
+
+Der gleitende Verlauf reagiert weniger empfindlich auf einzelne Ausreißer als die Einzelwerte und zeigt so den mittelfristigen Trend der Spielstärke.
+
+---
+
+## 11. LivePZ als Referenz
+
+Zusätzlich zum Performance Rating kann der offizielle **LivePZ**-Verlauf als Referenzlinie eingeblendet werden. Der LivePZ nach einem Punktspiel ergibt sich aus:
+
+$$\text{LivePZ}_{\text{nach}} = \text{TTR}_{\text{vor}} + \sum_{i=1}^{n} \Delta_i$$
+
+wobei TTR_vor der Eingangs-TTR zu Beginn des Punktspiels ist (für alle Einzelspiele des Tages gleich) und Δ*ᵢ* die offizielle TTR-Veränderung des *i*-ten Einzelspiels. Der Vergleich zwischen LivePZ und Performance Rating gibt Aufschluss darüber, ob das offizielle Rating die tatsächliche Spielstärke über- oder unterschätzt.
+
+---
+
+## 12. Subset-Analysen
+
+Bei Web-Import werden automatisch Teilmengen der Saison analysiert:
+
+| Subset | Kriterium |
+|--------|-----------|
+| Vorrunde | Spiele der Hinrunde |
+| Rückrunde | Spiele der Rückrunde |
+| Heimspiele | H/G-Kennzeichen = „H" |
+| Auswärtsspiele | H/G-Kennzeichen = „G" |
+| Letzte 5 Punktspiele | Ab ≥ 6 Punktspielen verfügbar |
+
+Jedes Subset enthält die vollständige Analyse: Performance Rating, 1σ- und 2σ-Konfidenzintervall, Bootstrap-Histogramm. Dies ermöglicht den Vergleich der Spielstärke unter verschiedenen Bedingungen – etwa ob Heim- und Auswärtsleistung signifikant voneinander abweichen.

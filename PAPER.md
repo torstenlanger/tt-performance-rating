@@ -53,7 +53,7 @@ $$p_{\text{TTR}}(\Delta) = \frac{1}{1 + 10^{-\Delta/150}}$$
 
 Diese Formel wird nach TTR_A aufgelöst. Setzt man die aus der Kaskade berechnete Match-Wahrscheinlichkeit *p*_Match für *p*_TTR(Δ) ein und löst nach TTR_A = TTR\* auf, ergibt sich:
 
-$$\text{TTR}^* = T - 150 \cdot \log_{10}\!\left(\frac{1}{p_{\text{Match}}} - 1\right)$$
+$$\text{TTR}^* = T - 150 \cdot \log_{10}\left(\frac{1}{p_{\text{Match}}} - 1\right)$$
 
 wobei *T* das bekannte TTR des Gegners ist. TTR\* ist damit das Rating, das die beobachtete Match-Wahrscheinlichkeit exakt erklärt.
 
@@ -93,7 +93,7 @@ Die MLE-Formulierung ermöglicht jedoch die direkte Berechnung des Likelihood-Ra
 
 Für eine einzelne Partie gegen einen Gegner mit TTR-Wert *T* ergibt sich das Performance Rating direkt aus der Kaskadeninversion (vgl. Abschnitt 3.3):
 
-$$\text{PR} = T - 150 \cdot \log_{10}\!\left(\frac{1}{p_{\text{Match}}(\hat{p})} - 1\right)$$
+$$\text{PR} = T - 150 \cdot \log_{10}\left(\frac{1}{p_{\text{Match}}(\hat{p})} - 1\right)$$
 
 ### 5.2 Saison (mehrere Partien)
 
@@ -188,7 +188,7 @@ Abhängigkeiten: `streamlit`, `scipy`, `numpy`, `pandas`, `requests`, `beautiful
 
 Neben dem einzelnen Punktspiel-Rating und dem linearen Trend bietet die App einen **gleitenden Verlauf**: für jedes Punktspiel *i* wird das Performance Rating aus einem rollierenden Fenster der letzten *w* ≤ 5 Punktspiele berechnet:
 
-$$\text{PR}_i^{\text{roll}} = f\!\left(\bigcup_{j=\max(1,\,i-4)}^{i} \text{Spiele}_j\right)$$
+$$\text{PR}_i^{\text{roll}} = f\left(\bigcup_{j=\max(1,\,i-4)}^{i} \text{Spiele}_j\right)$$
 
 Das Fenster wächst zu Saisonbeginn schrittweise an (1, 2, …, 5 Punktspiele) und bleibt ab dem fünften Punktspiel konstant bei maximal 5. Das Konfidenzintervall wird analog zum Gesamtrating per Bootstrap (500 Samples pro Fensterpunkt) berechnet und als 1σ- und 2σ-Band eingezeichnet.
 

@@ -2077,6 +2077,18 @@ def main():
             </div>
             """, unsafe_allow_html=True)
 
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style="font-size:0.88rem;color:#6b7280;line-height:1.8;">
+        📄 Die vollständige statistische Methodik ist im
+        <a href="https://github.com/torstenlanger/tt-performance-rating/blob/main/PAPER.md"
+           target="_blank" style="color:#3d8ef8;">Paper auf GitHub</a> dokumentiert.
+        &nbsp;·&nbsp;
+        <a href="https://github.com/torstenlanger/tt-performance-rating"
+           target="_blank" style="color:#3d8ef8;">Quellcode auf GitHub</a>
+        </div>
+        """, unsafe_allow_html=True)
+
     # ════════════════════════════════════════════════════════
     # TAB: Glossar
     # ════════════════════════════════════════════════════════

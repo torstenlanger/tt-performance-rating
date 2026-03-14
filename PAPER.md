@@ -71,7 +71,7 @@ Mit Verlängerung (beide Spieler bei 10 Punkten):
 
 $$\mathcal{L}(a{:}b \mid p) = \binom{20}{10} p^{10}(1-p)^{10} \cdot (p(1-p))^{a-11} \cdot p^2$$
 
-### 4.2 MLE über alle Sätze
+### 4.2 Maximum-Likelihood-Schätzung (MLE) über alle Sätze
 
 Der MLE-Schätzer maximiert die gemeinsame Log-Likelihood über alle *K* Sätze einer Partie:
 
@@ -79,7 +79,7 @@ $$\hat{p} = \arg\max_p \sum_{i=1}^{K} \log \mathcal{L}(a_i{:}b_i \mid p)$$
 
 Dies wird numerisch via `scipy.optimize.minimize_scalar` auf dem Intervall (0, 1) gelöst.
 
-**Äquivalenz zu Method of Moments:** Da alle Sätze unabhängig sind und jede Rally ein Bernoulli-Versuch mit Parameter *p* ist, ist der MLE-Schätzer analytisch äquivalent zur einfachen Punktquote:
+**Äquivalenz zu Method of Moments (MoM):** Da alle Sätze unabhängig sind und jede Rally ein Bernoulli-Versuch mit Parameter *p* ist, ist der MLE-Schätzer analytisch äquivalent zur einfachen Punktquote:
 
 $$\hat{p}_{\text{MLE}} = \hat{p}_{\text{MoM}} = \frac{\sum_i a_i}{\sum_i (a_i + b_i)}$$
 

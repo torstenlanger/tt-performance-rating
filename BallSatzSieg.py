@@ -1572,18 +1572,18 @@ def main():
                 show_rolling  = False
                 show_livepz   = False
 
-                toggle_cols = st.columns(3)
+                toggle_cols = st.columns([1, 1, 1])
                 with toggle_cols[0]:
                     if len(groups) >= 3:
-                        show_trend = st.toggle("📈 Linearer Trend", value=False)
+                        show_trend = st.toggle("📈 Trend", value=False)
                 with toggle_cols[1]:
                     if len(groups) >= 2:
-                        show_rolling = st.toggle("🔄 Gleitender Verlauf", value=False)
+                        show_rolling = st.toggle("🔄 Gleitend", value=False)
                 with toggle_cols[2]:
                     livepz_available = any(gs.get("livepz") is not None
                                            for gs in grp_stats.values())
                     if livepz_available:
-                        show_livepz = st.toggle("🏅 LivePZ-Verlauf", value=False)
+                        show_livepz = st.toggle("🏅 LivePZ", value=False)
 
                 # Datenpunkte: ein Eintrag pro Punktspiel
                 ps_x      = []
@@ -1647,7 +1647,7 @@ def main():
                     fig.add_hline(y=y_val, line_color="#3d6ea8", line_width=1,
                                   line_dash="dash",
                                   annotation_text=label, annotation_position="right",
-                                  annotation_font=dict(color="#3d6ea8", size=10))
+                                  annotation_font=dict(color="#3d6ea8", size=9))
 
                 # 3) 1σ-Grenzen (gestrichpunktet)
                 for y_val, label in [(s1_low, f"−1σ: {s1_low:.0f}"),
@@ -1655,13 +1655,13 @@ def main():
                     fig.add_hline(y=y_val, line_color="#5b8fe8", line_width=1,
                                   line_dash="dashdot",
                                   annotation_text=label, annotation_position="right",
-                                  annotation_font=dict(color="#5b8fe8", size=10))
+                                  annotation_font=dict(color="#5b8fe8", size=9))
 
                 # 4) Performance Rating (durchgezogen)
                 fig.add_hline(y=ttr_hat, line_color="#3d8ef8", line_width=3,
                               annotation_text=f"PR: {ttr_hat:.0f}",
                               annotation_position="right",
-                              annotation_font=dict(color="#3d8ef8", size=11))
+                              annotation_font=dict(color="#3d8ef8", size=10))
 
                 # 5) Linearer Trend (gewichtet nach 1/σ²)
                 if show_trend and len(ps_x) >= 3:
@@ -1860,18 +1860,18 @@ def main():
                 fig.update_layout(
                     paper_bgcolor="#0f1117",
                     plot_bgcolor="#161920",
-                    font=dict(family="DM Sans, sans-serif", color="#9ca3af", size=12),
+                    font=dict(family="DM Sans, sans-serif", color="#9ca3af", size=11),
                     xaxis=dict(title="Punktspiel", tickmode="linear", tick0=1, dtick=1,
                                gridcolor="#2a2d3a", zeroline=False),
                     yaxis=dict(title="Rating", gridcolor="#2a2d3a", zeroline=False),
                     showlegend=show_rolling or (show_livepz and bool(livepz_x)),
                     legend=dict(
                         bgcolor="#161920", bordercolor="#2a2d3a", borderwidth=1,
-                        font=dict(size=11, color="#9ca3af"),
+                        font=dict(size=10, color="#9ca3af"),
                         orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
                     ),
-                    margin=dict(l=50, r=120, t=50, b=50),
-                    height=420,
+                    margin=dict(l=50, r=140, t=50, b=50),
+                    height=480,
                 )
 
                 st.plotly_chart(fig, use_container_width=True)

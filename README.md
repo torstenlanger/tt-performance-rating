@@ -8,9 +8,9 @@
 
 ## Was ist das?
 
-Das offizielle TTR-Rating misst langfristige Spielstärke und reagiert nur auf Sieg oder Niederlage. Diese App berechnet ein **Performance Rating** direkt aus den Satzergebnissen – unabhängig davon ob man gewonnen oder verloren hat.
+Das offizielle TTR-Rating misst langfristige Spielstärke und reagiert nur auf Sieg oder Niederlage. Diese App berechnet ein **Performance Rating** direkt aus den Punktständen der einzelnen Sätze (z.B. 11:7, 9:11, 11:8) – unabhängig davon ob man gewonnen oder verloren hat.
 
-Ein knappes 2:3 gegen einen deutlich stärkeren Gegner kann ein höheres Performance Rating ergeben als ein klares 3:0 gegen einen schwachen Gegner.
+Eine knappe Niederlage gegen einen deutlich stärkeren Gegner kann ein höheres Performance Rating ergeben als ein klarer Sieg gegen einen schwachen Gegner.
 
 ## Features
 
@@ -32,7 +32,7 @@ Das Modell basiert auf einer einzigen Annahme: jeder Punkt wird mit einer festen
 p (Rally)  →  p_Satz  →  p_Match  →  TTR*
 ```
 
-Die Rally-Wahrscheinlichkeit wird per Maximum-Likelihood aus den Satzergebnissen geschätzt (äquivalent zur einfachen Punktquote). Das Performance Rating ergibt sich durch Inversion der TTR-Formel.
+Die Rally-Wahrscheinlichkeit wird per Maximum-Likelihood aus den Punktständen der einzelnen Sätze geschätzt (äquivalent zur einfachen Punktquote). Das Performance Rating ergibt sich durch Inversion der TTR-Formel.
 
 Eine ausführliche Beschreibung der Methodik findet sich in [PAPER.md](PAPER.md).
 

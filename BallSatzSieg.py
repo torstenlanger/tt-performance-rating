@@ -1680,8 +1680,8 @@ def main():
                     y_fit = intercept + slope * xs
 
                     # Konfidenzband (95%) des Fits
-                    n     = len(xs)
-                    dof   = n - 2
+                    n_fit = len(xs)
+                    dof   = max(n_fit - 2, 1)
                     resid = ys - y_fit
                     s2    = float(np.sum(ws * resid**2) / dof)   # gewichtete Residualvarianz
                     Sw    = float(np.sum(ws))
@@ -1749,11 +1749,6 @@ def main():
                         f'<div style="font-size:0.82rem;color:{trend_color};'
                         f'font-family:DM Mono,monospace;margin-top:0.3rem;">'
                         f'{trend_dir} Steigung: {slope:+.2f} ± {se_slope:.2f} Punkte/Punktspiel'
-                        f'</div>'
-                        f'<div style="font-size:0.78rem;color:#6b7280;'
-                        f'font-family:DM Mono,monospace;margin-top:0.1rem;">'
-                        f'Achsenabschnitt: {intercept:.0f} ± {se_intercept:.0f}'
-                        f'&ensp;·&ensp;Freiheitsgrade: {dof}'
                         f'</div>',
                         unsafe_allow_html=True
                     )

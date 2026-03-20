@@ -1113,6 +1113,7 @@ def main():
                 selected = [merged[i] for i in selected_indices]
                 st.session_state["web_prefill"]      = selected
                 st.session_state["_prefill_applied"] = None  # Slider-Reset erzwingen
+                st.session_state.pop("calc_results", None)   # alte Analyse löschen
                 st.session_state["switch_to_manuell"] = True
                 st.rerun()
 
